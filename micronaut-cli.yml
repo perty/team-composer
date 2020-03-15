@@ -1,0 +1,5 @@
+profile: service
+defaultPackage: team.composer
+---
+testFramework: junit
+sourceLanguage: java
