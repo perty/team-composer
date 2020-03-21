@@ -1,9 +1,17 @@
 module Main exposing (Model, Msg(..), init, initialModel, main, subscriptions, update, view)
 
+import Bootstrap.Button as Button
+import Bootstrap.ButtonGroup as ButtonGroup
+import Bootstrap.Card as Card
+import Bootstrap.Card.Block as Block
+import Bootstrap.Form as Form
+import Bootstrap.Form.Checkbox as CheckBox
+import Bootstrap.Form.Input as Input
+import Bootstrap.Form.Select as Select
+import Bootstrap.Grid as Grid
 import Browser
-import Html exposing (Html, div, h1, h2, input, option, p, select, text)
-import Html.Attributes exposing (class, style, type_, value)
-import Html.Events exposing (onClick, onInput)
+import Html exposing (Html, div, h1, label, p, text)
+import Html.Attributes exposing (class, for, name)
 
 
 main =
@@ -22,6 +30,9 @@ type Msg
     | ViewCompose
     | ChangeMember String
     | AddMember
+    | ChangeSearch String
+    | SearchForSetUp
+    | SelectMemberChanged String
 
 
 type ViewMode
@@ -34,6 +45,7 @@ type ViewMode
 type alias Model =
     { viewMode : ViewMode
     , currentMember : String
+    , currentSearch : String
     , members : List String
     }
 
@@ -45,7 +57,11 @@ init _ =
 
 initialModel : Model
 initialModel =
-    { viewMode = Home, currentMember = "", members = [] }
+    { viewMode = Home
+    , currentMember = ""
+    , currentSearch = ""
+    , members = []
+    }
 
 
 
@@ -62,7 +78,11 @@ update msg model =
             ( { model | viewMode = Create }, Cmd.none )
 
         ViewPreferences ->
-            ( { model | viewMode = Preferences }, Cmd.none )
+            let
+                selected =
+                    Maybe.withDefault "" <| List.head model.members
+            in
+            ( { model | viewMode = Preferences, currentMember = selected }, Cmd.none )
 
         ViewCompose ->
             ( { model | viewMode = Compose }, Cmd.none )
@@ -71,7 +91,20 @@ update msg model =
             ( { model | currentMember = name }, Cmd.none )
 
         AddMember ->
-            ( { model | members = model.currentMember :: model.members, currentMember = "" }, Cmd.none )
+            if (List.filter (\m -> m == model.currentMember) model.members |> List.length) > 0 then
+                ( model, Cmd.none )
+
+            else
+                ( { model | members = model.currentMember :: model.members, currentMember = "" }, Cmd.none )
+
+        ChangeSearch search ->
+            ( { model | currentSearch = search }, Cmd.none )
+
+        SearchForSetUp ->
+            ( model, Cmd.none )
+
+        SelectMemberChanged member ->
+            ( { model | currentMember = member }, Cmd.none )
 
 
 
@@ -80,7 +113,7 @@ update msg model =
 
 view : Model -> Html Msg
 view model =
-    div []
+    Grid.container []
         [ h1 [] [ text "Team Composer" ]
         , p [] [ text "Compose teams from a group of people, based on their preferences about who they wish to work with." ]
         , viewMenuBar
@@ -90,42 +123,77 @@ view model =
 
 viewMenuBar : Html Msg
 viewMenuBar =
-    div [ class "row", style "max-width" "fit-content" ]
-        [ input [ type_ "button", value "Home", onClick ViewHome ] []
-        , input [ type_ "button", value "Create", onClick ViewCreate ] []
-        , input [ type_ "button", value "Preferences", onClick ViewPreferences ] []
-        , input [ type_ "button", value "Compose", onClick ViewCompose ] []
+    ButtonGroup.buttonGroup []
+        [ topButton ViewHome "Home"
+        , topButton ViewCreate "Create"
+        , topButton ViewPreferences "Preferences"
+        , topButton ViewCompose "Compose"
         ]
+
+
+topButton msg label =
+    ButtonGroup.button [ Button.outlinePrimary, Button.onClick msg ] [ text label ]
 
 
 viewBody : Model -> Html Msg
 viewBody model =
     case model.viewMode of
         Home ->
-            div [] []
+            viewHomePage model
 
         Create ->
-            div []
-                [ h2 [] [ text "Create the set up" ]
-                , div []
-                    [ text "Enter member name:"
-                    , input [ value model.currentMember, onInput ChangeMember ] []
-                    , input [ type_ "button", value "+", onClick AddMember ] []
-                    ]
-                , viewMembers model.members
-                ]
+            viewCreatePage model
 
         Preferences ->
-            div []
-                [ h2 [] [ text "Set preferences" ]
-                , viewPreferences model
-                ]
+            viewPreferences model
 
         Compose ->
-            div []
-                [ h2 [] [ text "Compose" ]
-                , p [] [ text "The teams are composed given the preferences, if possible." ]
-                ]
+            viewComposePage model
+
+
+viewHomePage : Model -> Html Msg
+viewHomePage model =
+    Card.config []
+        |> Card.block []
+            [ Block.titleH4 [] [ text "Load a set up" ]
+            , Block.text [] [ p [] [ text "Load a previously entered set up." ] ]
+            , Block.custom <| viewFormToFindSetUp model
+            ]
+        |> Card.view
+
+
+viewFormToFindSetUp : Model -> Html Msg
+viewFormToFindSetUp model =
+    Form.form []
+        [ Form.label [ for "search" ] [ text "Search" ]
+        , Input.text [ Input.id "search", Input.value model.currentSearch ]
+        , Button.button [ Button.primary, Button.onClick SearchForSetUp ] [ text "Search" ]
+        ]
+
+
+viewCreatePage : Model -> Html Msg
+viewCreatePage model =
+    Card.config []
+        |> Card.block []
+            [ Block.titleH4 [] [ text "Create the set up" ]
+            , Block.text [] [ text "Enter the members of this set up. No duplicate names." ]
+            , Block.custom <| viewFormToAddMember model
+            , Block.text [] [ text "Current members:" ]
+            , Block.custom <| viewMembers model.members
+            ]
+        |> Card.view
+
+
+viewFormToAddMember : Model -> Html Msg
+viewFormToAddMember model =
+    Form.form []
+        [ Form.group []
+            [ Form.label [ for "name" ] [ text "Enter member name:" ]
+            , Input.text [ Input.id "name", Input.onInput ChangeMember, Input.value model.currentMember ]
+            , Form.help [] [ text "The name of a member" ]
+            ]
+        , Button.button [ Button.primary, Button.onClick AddMember ] [ text "Add member" ]
+        ]
 
 
 viewMembers : List String -> Html Msg
@@ -135,16 +203,47 @@ viewMembers members =
 
 viewPreferences : Model -> Html Msg
 viewPreferences model =
-    div []
-        [ select []
-            (List.map (\m -> option [] [ text m ]) model.members)
-        , div [ class "col" ]
-            (List.map checkbox model.members)
+    Card.config []
+        |> Card.block []
+            [ Block.titleH4 [] [ text "Set preferences" ]
+            , Block.text [] [ text "Select a member and mark with whom they can work with" ]
+            , Block.custom <|
+                viewFormToSetPreferences model
+            ]
+        |> Card.view
+
+
+viewFormToSetPreferences : Model -> Html Msg
+viewFormToSetPreferences model =
+    let
+        memberList =
+            List.filter (\m -> m /= model.currentMember) model.members
+    in
+    Form.form []
+        [ Form.group []
+            [ Form.label [ for "select" ] [ text "Select a member" ]
+            , Select.select [ Select.id "select", Select.onChange SelectMemberChanged ]
+                (List.map (\m -> Select.item [] [ text m ]) model.members)
+            , text "Can work with:"
+            , div [ class "col" ]
+                (List.map checkbox memberList)
+            ]
         ]
 
 
+checkbox : String -> Html Msg
 checkbox m =
-    input [ type_ "checkbox", value m ] [ text m ]
+    CheckBox.checkbox [ CheckBox.id m ] m
+
+
+viewComposePage : Model -> Html Msg
+viewComposePage _ =
+    Card.config []
+        |> Card.block []
+            [ Block.titleH4 [] [ text "Compose" ]
+            , Block.custom <| p [] [ text "The teams are composed given the preferences, if possible." ]
+            ]
+        |> Card.view
 
 
 
@@ -152,5 +251,5 @@ checkbox m =
 
 
 subscriptions : Model -> Sub Msg
-subscriptions model =
+subscriptions _ =
     Sub.none
