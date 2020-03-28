@@ -43,21 +43,23 @@ type ViewMode
 
 
 type alias Model =
-    { viewMode : ViewMode
+    { host : String
+    , viewMode : ViewMode
     , currentMember : String
     , currentSearch : String
     , members : List String
     }
 
 
-init : () -> ( Model, Cmd Msg )
-init _ =
-    ( initialModel, Cmd.none )
+init : String -> ( Model, Cmd Msg )
+init locationHref =
+    ( initialModel locationHref, Cmd.none )
 
 
-initialModel : Model
-initialModel =
-    { viewMode = Home
+initialModel : String -> Model
+initialModel locationHref =
+    { host = locationHref
+    , viewMode = Home
     , currentMember = ""
     , currentSearch = ""
     , members = []
